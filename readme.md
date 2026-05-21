@@ -77,68 +77,361 @@ JWT_SECRET=
 ```
 11. En consola ejecutar comando `php artisan migrate` para ejecutar migraciones y `php artisan jwt:secret` para generar llave de validación JWT
 
-# ARQUITECTURA ELEGIDA
+# Arquitectura de Contenedores — Proyecto VERTISOL
 
 ## Descripción General
 
-La arquitectura está basada en contenedores Docker utilizando Docker Compose para orquestar los servicios principales de la aplicación:
+La arquitectura del proyecto está basada en contenedores Docker utilizando **Docker Compose** para la orquestación de servicios.
 
-Frontend en Next.js + TypeScript
-Backend en Laravel + PHP
-Base de datos MySQL 8
-Administrador visual de base de datos phpMyAdmin
+El sistema se compone de:
 
-Todos los servicios se comunican mediante una red privada Docker llamada app-network.
+* Frontend en **Next.js + TypeScript**
+* Backend en **Laravel + PHP**
+* Base de datos **MySQL 8**
+* Administrador visual **phpMyAdmin**
 
-                    ┌──────────────────────┐
-                    │      Navegador       │
-                    │    Cliente Web       │
-                    └──────────┬───────────┘
-                               │
-                http://localhost:5180
-                               │
-                               ▼
-┌──────────────────────────────────────────────────┐
-│             FRONTEND CONTAINER                   │
-│           NEXT-TS-VERTISOL                       │
-│--------------------------------------------------│
-│ Next.js + TypeScript                             │
-│ Puerto interno: 3000                             │
-│ Puerto host: 5180                                │
-└──────────────────────┬───────────────────────────┘
-                       │
-                       │ API Requests
-                       ▼
-┌──────────────────────────────────────────────────┐
-│              BACKEND CONTAINER                   │
-│             LARAVEL-API-VERTISOL                 │
-│--------------------------------------------------│
-│ Laravel + PHP                                    │
-│ Puerto interno: 8000                             │
-│ Puerto host: 8000                                │
-│ Ejecuta: php artisan serve                       │
-└──────────────────────┬───────────────────────────┘
-                       │
-                       │ Conexión MySQL
-                       ▼
-┌──────────────────────────────────────────────────┐
-│               MYSQL CONTAINER                    │
-│                 MYSQL-VERTISOL                   │
-│--------------------------------------------------│
-│ MySQL 8.0                                        │
-│ Puerto interno: 3306                             │
-│ Puerto host: 3306                                │
-│ Persistencia mediante Docker Volume              │
-└──────────────────────┬───────────────────────────┘
-                       │
-                       │ Administración visual
-                       ▼
-┌──────────────────────────────────────────────────┐
-│             PHPMYADMIN CONTAINER                 │
-│                  phpmyadmin                      │
-│--------------------------------------------------│
-│ phpMyAdmin                                       │
-│ Puerto interno: 80                               │
-│ Puerto host: 8080                                │
-└──────────────────────────────────────────────────┘
+Todos los servicios se comunican mediante una red privada Docker llamada `app-network`.
+
+---
+
+# Diagrama General de Arquitectura
+
+```mermaid
+graph TD
+
+A[Navegador Cliente] -->|localhost:5180| B[Frontend Next.js]
+B -->|API Requests| C[Backend Laravel]
+C -->|MySQL Connection| D[(MySQL 8)]
+D --> E[phpMyAdmin]
+
+subgraph Docker Network app-network
+B
+C
+D
+E
+end
+```
+
+---
+
+# Servicios
+
+## 1. Frontend — Next.js + TypeScript
+
+### Contenedor
+
+`NEXT-TS-VERTISOL`
+
+### Tecnologías
+
+* Next.js
+* React
+* TypeScript
+* Node.js
+
+### Configuración
+
+| Propiedad         | Valor                      |
+| ----------------- | -------------------------- |
+| Puerto host       | `5180`                     |
+| Puerto contenedor | `3000`                     |
+| Volumen principal | `./front-end:/var/www/app` |
+
+### Objetivo
+
+Proporcionar la interfaz web principal del sistema VERTISOL.
+
+### Características
+
+* Hot Reload habilitado mediante volúmenes Docker.
+* Comunicación directa con la API Laravel.
+* Persistencia de `node_modules`.
+* Ejecución aislada mediante contenedor Docker.
+
+### Acceso
+
+```bash
+http://localhost:5180
+```
+
+---
+
+## 2. Backend — Laravel API
+
+### Contenedor
+
+`LARAVEL-API-VERTISOL`
+
+### Tecnologías
+
+* Laravel
+* PHP
+* Composer
+
+### Configuración
+
+| Propiedad             | Valor           |
+| --------------------- | --------------- |
+| Puerto host           | `8000`          |
+| Puerto contenedor     | `8000`          |
+| Directorio de trabajo | `/var/www/html` |
+
+### Comando de ejecución
+
+```bash
+php artisan serve --host=0.0.0.0 --port=8000
+```
+
+### Variables de entorno
+
+| Variable      | Valor       |
+| ------------- | ----------- |
+| DB_CONNECTION | mysql       |
+| DB_HOST       | mysql       |
+| DB_PORT       | 3306        |
+| DB_DATABASE   | vertisol_DB |
+| DB_USERNAME   | root        |
+| DB_PASSWORD   | root123     |
+
+### Objetivo
+
+Gestionar:
+
+* Lógica de negocio
+* API REST
+* Autenticación
+* Persistencia de datos
+* Integración con MySQL
+
+### Acceso
+
+```bash
+http://localhost:8000
+```
+
+---
+
+## 3. Base de Datos — MySQL 8
+
+### Contenedor
+
+`MYSQL-VERTISOL`
+
+### Tecnología
+
+* MySQL 8.0
+
+### Configuración
+
+| Propiedad         | Valor  |
+| ----------------- | ------ |
+| Puerto host       | `3306` |
+| Puerto contenedor | `3306` |
+
+### Variables de entorno
+
+| Variable            | Valor       |
+| ------------------- | ----------- |
+| MYSQL_DATABASE      | vertisol_DB |
+| MYSQL_USER          | app_user    |
+| MYSQL_PASSWORD      | secret123   |
+| MYSQL_ROOT_PASSWORD | root123     |
+
+### Persistencia
+
+```yaml
+volumes:
+  - mysql_data-app-vertisol:/var/lib/mysql
+```
+
+### Objetivo
+
+Almacenar toda la información persistente del sistema.
+
+---
+
+## 4. phpMyAdmin
+
+### Contenedor
+
+`phpmyadmin`
+
+### Tecnología
+
+* phpMyAdmin
+
+### Configuración
+
+| Propiedad         | Valor  |
+| ----------------- | ------ |
+| Puerto host       | `8080` |
+| Puerto contenedor | `80`   |
+
+### Variables de entorno
+
+| Variable | Valor |
+| -------- | ----- |
+| PMA_HOST | mysql |
+| PMA_PORT | 3306  |
+
+### Objetivo
+
+Administrar visualmente la base de datos MySQL.
+
+### Acceso
+
+```bash
+http://localhost:8080
+```
+
+---
+
+# Red Docker
+
+## Nombre de la red
+
+```yaml
+app-network
+```
+
+## Driver
+
+```yaml
+bridge
+```
+
+## Objetivo
+
+Permitir la comunicación interna entre:
+
+* Frontend
+* Backend
+* MySQL
+* phpMyAdmin
+
+---
+
+# Volúmenes Docker
+
+## Volumen Persistente
+
+```yaml
+mysql_data-app-vertisol
+```
+
+## Objetivo
+
+Mantener persistentes los datos de MySQL incluso después de reiniciar o eliminar los contenedores.
+
+---
+
+# Flujo de Comunicación
+
+```text
+Usuario
+   │
+   ▼
+Frontend (Next.js)
+   │
+   ▼
+Backend Laravel API
+   │
+   ▼
+MySQL Database
+```
+
+---
+
+# Dependencias entre Servicios
+
+| Servicio   | Depende de |
+| ---------- | ---------- |
+| frontend   | backend    |
+| backend    | mysql      |
+| phpmyadmin | mysql      |
+
+---
+
+# Puertos del Proyecto
+
+| Servicio         | Puerto Host | Puerto Contenedor |
+| ---------------- | ----------- | ----------------- |
+| Frontend Next.js | 5180        | 3000              |
+| Backend Laravel  | 8000        | 8000              |
+| MySQL            | 3306        | 3306              |
+| phpMyAdmin       | 8080        | 80                |
+
+---
+
+# Comandos Útiles
+
+## Levantar contenedores
+
+```bash
+docker compose up -d
+```
+
+## Detener contenedores
+
+```bash
+docker compose down
+```
+
+## Ver logs
+
+```bash
+docker compose logs -f
+```
+
+## Acceder al contenedor Laravel
+
+```bash
+docker exec -it LARAVEL-API-VERTISOL bash
+```
+
+## Ejecutar migraciones
+
+```bash
+php artisan migrate
+```
+
+## Generar APP_KEY
+
+```bash
+php artisan key:generate
+```
+
+---
+
+# Beneficios de la Arquitectura
+
+* Separación clara de responsabilidades.
+* Entorno reproducible entre desarrolladores.
+* Fácil despliegue en distintos ambientes.
+* Persistencia de datos mediante Docker Volumes.
+* Comunicación aislada mediante red privada Docker.
+* Escalabilidad de servicios.
+* Hot Reload durante desarrollo.
+* Administración visual de base de datos.
+
+---
+
+# Estructura Recomendada del Proyecto
+
+```text
+project-root/
+│
+├── docker-compose.yml
+│
+├── front-end/
+│   ├── Dockerfile
+│   └── ...
+│
+├── back-end/
+│   ├── Dockerfile
+│   └── ...
+│
+└── README.md
+```
+
 
